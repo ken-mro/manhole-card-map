@@ -44,6 +44,16 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 }
 .brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .brand svg { flex: none; }
+.brand > div { min-width: 0; }
+.brand small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn { flex: none; }
+.btn svg { flex: none; }
+/* phones: buttons become icon-only so they never sit on top of the title */
+@media (max-width: 520px) {
+  .btn .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .bar .btn { width: 42px; height: 42px; padding: 0; justify-content: center; }
+  .brand h1 { font-size: 15px; }
+}
 .brand h1 { font-size: 16px; font-weight: 900; margin: 0; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand small { display: block; font-size: 11px; font-weight: 400; color: #b9c6cd; letter-spacing: .02em; }
 .btn {
@@ -60,14 +70,31 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000;
   background: var(--paper); border-top: 1px solid var(--line);
   border-radius: 14px 14px 0 0; box-shadow: 0 -6px 18px rgb(0 0 0 / .18);
-  padding: 6px 16px calc(var(--safe-bottom) + 10px);
+  padding: 0 16px calc(var(--safe-bottom) + 10px);
   max-height: 44vh; display: flex; flex-direction: column;
   transition: max-height .2s ease;
 }
-.sheet.min { max-height: 64px; }
-.grab { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 2px 0 6px; border: 0; padding: 0; cursor: pointer; }
-.sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sheet.min { max-height: none; }
+.sheet.min .list { display: none; }
+/* the whole header strip is the open/close control: big touch target, also swipeable */
+.sheet-head {
+  appearance: none; border: 0; background: none; color: inherit; font: inherit; text-align: left;
+  width: calc(100% + 32px); margin: 0 -16px; padding: 10px 16px 12px; cursor: pointer;
+  display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 12px; row-gap: 2px;
+  touch-action: none; -webkit-tap-highlight-color: transparent; border-radius: 14px 14px 0 0;
+}
+.sheet-head::before {
+  content: ""; grid-column: 1 / -1; justify-self: center; width: 44px; height: 5px; border-radius: 3px;
+  background: var(--muted); opacity: .45; margin-bottom: 8px;
+}
 .sheet-head h2 { margin: 0; font-size: 15px; font-weight: 900; }
+.sheet-head .status { grid-column: 1; }
+.sheet-head .chev {
+  grid-column: 2; grid-row: 2 / span 2; align-self: center;
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--muted) 18%, transparent); transition: transform .2s ease;
+}
+.sheet.min .chev { transform: rotate(180deg); }
 .status { font-size: 12px; color: var(--muted); }
 .list { overflow-y: auto; margin-top: 8px; display: grid; gap: 2px; padding-bottom: 4px; }
 .row {
@@ -131,7 +158,7 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 .pop a.go { display: inline-block; margin-top: 10px; font-weight: 700; font-size: 13px; color: #1a73e8; text-decoration: none; }
 @media (max-width: 380px) { .pop { grid-template-columns: 88px 1fr; } .pop img { width: 88px; } }
 .leaflet-top { top: calc(var(--safe-top) + 64px); }
-@media (prefers-reduced-motion: reduce) { .sheet, .drawer { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sheet, .drawer, .sheet-head .chev { transition: none; } }
 </style>
 </head>
 <body>
@@ -143,14 +170,19 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
     <div><h1>マンホールカードマップ</h1><small id="sub">第1〜29弾・特別版</small></div>
   </div>
   <button class="btn" id="locate" type="button" aria-pressed="false" title="現在地を表示">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>現在地
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="lbl">現在地</span>
   </button>
-  <button class="btn" id="filterBtn" type="button" aria-controls="drawer" aria-expanded="false">弾で絞り込み</button>
+  <button class="btn" id="filterBtn" type="button" aria-controls="drawer" aria-expanded="false" title="弾で絞り込み">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span class="lbl">弾で絞り込み</span>
+  </button>
 </header>
 
 <section class="sheet" id="sheet" aria-label="近くのカード">
-  <button class="grab" id="grab" type="button" aria-label="一覧を開閉"></button>
-  <div class="sheet-head"><h2 id="listTitle">近くのマンホールカード</h2><span class="status" id="status">現在地を取得しています…</span></div>
+  <button class="sheet-head" id="sheetHead" type="button" aria-controls="list" aria-expanded="true">
+    <h2 id="listTitle">近くのマンホールカード</h2>
+    <span class="status" id="status">現在地を取得しています…</span>
+    <span class="chev" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+  </button>
   <div class="list" id="list"></div>
 </section>
 
@@ -289,14 +321,25 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
       b.className = 'row'; b.type = 'button';
       b.innerHTML = `<span class="badge" style="background:${color[c.key]}">${esc(short(s))}</span><span class="t"><b>${esc(c.title)}</b><span>${esc(c.subtitle)}・${esc(s.label)}</span></span><span class="d">${fmt(d)}</span>`;
       b.onclick = () => {
-        if (innerWidth < 700) $('sheet').classList.add('min');
+        if (innerWidth < 700) setSheet(false);
         cluster.zoomToShowLayer(c.marker, () => setTimeout(() => c.marker.openPopup(), 250));
       };
       list.appendChild(b);
     });
     if (!near.length) list.innerHTML = '<p class="status">表示する弾が選ばれていません。「弾で絞り込み」から選んでください。</p>';
   }
-  $('grab').onclick = () => $('sheet').classList.toggle('min');
+  // open/close the list: tap the header strip, or swipe it up/down
+  const setSheet = (open) => { $('sheet').classList.toggle('min', !open); $('sheetHead').setAttribute('aria-expanded', open); };
+  let swipeY = null, swiped = false;
+  const head = $('sheetHead');
+  head.addEventListener('pointerdown', (e) => { swipeY = e.clientY; swiped = false; });
+  head.addEventListener('pointermove', (e) => {
+    if (swipeY === null || swiped) return;
+    const dy = e.clientY - swipeY;
+    if (Math.abs(dy) > 24) { setSheet(dy < 0); swiped = true; }
+  });
+  addEventListener('pointerup', () => { swipeY = null; });
+  head.addEventListener('click', () => { if (swiped) { swiped = false; return; } setSheet($('sheet').classList.contains('min')); });
   let t; map.on('moveend', () => { if (!me) { clearTimeout(t); t = setTimeout(renderList, 150); } });
 
   // location
