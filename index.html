@@ -156,7 +156,29 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 .pop dt { color: #5d6b74; }
 .pop dd { margin: 0; font-family: var(--font-mono); font-size: 11.5px; }
 .pop a.go { display: inline-block; margin-top: 10px; font-weight: 700; font-size: 13px; color: #1a73e8; text-decoration: none; }
-@media (max-width: 380px) { .pop { grid-template-columns: 88px 1fr; } .pop img { width: 88px; } }
+/* covered card: design hidden until tapped */
+.pop .reveal {
+  width: 112px; aspect-ratio: 194 / 270; border-radius: 6px; border: 0; cursor: pointer; padding: 8px;
+  display: grid; place-content: center; justify-items: center; gap: 6px;
+  background: repeating-linear-gradient(45deg, #2b3b46 0 6px, #24323c 6px 12px); color: #e7ecee;
+  font: 700 11px/1.4 var(--font-body); text-align: center;
+}
+.pop .reveal:hover { filter: brightness(1.15); }
+.pop .reveal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 380px) { .pop { grid-template-columns: 88px 1fr; } .pop img, .pop .reveal { width: 88px; } }
+
+/* settings switch in the drawer */
+.setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.setting b { display: block; font-size: 14px; }
+.setting span.note { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.switch { position: relative; flex: none; width: 46px; height: 28px; }
+.switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.switch i { position: absolute; inset: 0; border-radius: 14px; background: var(--line); transition: background .15s; pointer-events: none; }
+.switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .3); transition: transform .15s; }
+.switch input:checked + i { background: var(--me); }
+.switch input:checked + i::after { transform: translateX(18px); }
+.switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drawer h3 { margin: 4px 0 0; font-size: 14px; font-weight: 900; }
 .leaflet-top { top: calc(var(--safe-top) + 64px); }
 @media (prefers-reduced-motion: reduce) { .sheet, .drawer, .sheet-head .chev { transition: none; } }
 </style>
@@ -172,8 +194,8 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
   <button class="btn" id="locate" type="button" aria-pressed="false" title="現在地を表示">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span class="lbl">現在地</span>
   </button>
-  <button class="btn" id="filterBtn" type="button" aria-controls="drawer" aria-expanded="false" title="弾で絞り込み">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span class="lbl">弾で絞り込み</span>
+  <button class="btn" id="filterBtn" type="button" aria-controls="drawer" aria-expanded="false" title="表示設定（デザイン・弾）">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span class="lbl">表示設定</span>
   </button>
 </header>
 
@@ -187,8 +209,13 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 </section>
 
 <div class="scrim" id="scrim" hidden></div>
-<aside class="drawer" id="drawer" aria-label="弾で絞り込み">
-  <h2>表示する弾</h2>
+<aside class="drawer" id="drawer" aria-label="表示設定">
+  <h2>表示設定</h2>
+  <label class="setting" for="showArt">
+    <span><b>カードのデザインを表示</b><span class="note">オフにすると、行ってからのお楽しみ用にデザインを隠します。隠したカードはタップで個別に見られます。</span></span>
+    <span class="switch"><input type="checkbox" id="showArt" role="switch"><i></i></span>
+  </label>
+  <h3>表示する弾</h3>
   <div class="tools">
     <button class="btn" type="button" id="all">すべて</button>
     <button class="btn" type="button" id="none">すべて外す</button>
@@ -240,11 +267,33 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   let me = null;
+  // card design visibility (some people want it to be a surprise on site)
+  let showArt = store.get('mcm.showArt') ?? true;
+  const cardImg = (c) => `<a href="${IMG + encodeURIComponent(c.code)}.jpg" target="_blank" rel="noopener"><img src="${IMG + encodeURIComponent(c.code)}.jpg" alt="${esc(c.title)}のマンホールカード" loading="lazy"></a>`;
+  const byCode = {};
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.reveal');
+    if (!b) return;
+    const c = byCode[b.dataset.code];
+    if (c) b.outerHTML = cardImg(c);
+  });
+  const artToggle = $('showArt');
+  artToggle.checked = showArt;
+  artToggle.addEventListener('change', () => {
+    showArt = artToggle.checked;
+    store.set('mcm.showArt', showArt);
+    map.closePopup();
+  });
+
   const popup = (c) => {
     const s = byKey[c.key];
     const far = me ? `<dt>距離</dt><dd>${fmt(dist(me.lat, me.lng, c.lat, c.lng))}</dd>` : '';
+    const art = showArt ? cardImg(c)
+      : `<button class="reveal" type="button" data-code="${esc(c.code)}" aria-label="${esc(c.title)}のカードデザインを表示">
+          <svg width="26" height="26" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12" fill="none" stroke="#e8a33d" stroke-width="2"/><path d="M8 14h12M14 8v12" stroke="#8fa3af" stroke-width="1.6"/></svg>
+          デザインは<br>現地でのお楽しみ<br><u>タップで表示</u></button>`;
     return `<div class="pop">
-      <a href="${IMG + encodeURIComponent(c.code)}.jpg" target="_blank" rel="noopener"><img src="${IMG + encodeURIComponent(c.code)}.jpg" alt="${esc(c.title)}のマンホールカード" loading="lazy"></a>
+      ${art}
       <div>
         <span class="badge" style="background:${color[c.key]}">${esc(s.label)}</span>
         <h3>${esc(c.title)}</h3><div class="sub">${esc(c.subtitle)}・${esc(c.group)}</div>
@@ -255,6 +304,7 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 
   cards.forEach((c) => {
     const s = byKey[c.key];
+    byCode[c.code] = c;
     c.marker = L.marker([c.lat, c.lng], {
       title: `${s.label} ${c.title}`,
       icon: L.divIcon({ className: '', html: `<div class="pin${c.key.startsWith('SP') ? ' sp' : ''}" style="background:${color[c.key]}"><span>${short(s)}</span></div>`, iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] }),
@@ -326,7 +376,7 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
       };
       list.appendChild(b);
     });
-    if (!near.length) list.innerHTML = '<p class="status">表示する弾が選ばれていません。「弾で絞り込み」から選んでください。</p>';
+    if (!near.length) list.innerHTML = '<p class="status">表示する弾が選ばれていません。「表示設定」から選んでください。</p>';
   }
   // open/close the list: tap the header strip, or swipe it up/down
   const setSheet = (open) => { $('sheet').classList.toggle('min', !open); $('sheetHead').setAttribute('aria-expanded', open); };
