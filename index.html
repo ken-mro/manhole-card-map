@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>マンホールカードマップ</title>
+<meta name="theme-color" content="#1d2a33">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css">
+<style>
+/* Layout: full-screen map; top bar; bottom sheet listing the nearest cards; side drawer for the 弾 filter */
+:root {
+  --iron: #1d2a33;        /* cast-iron cover */
+  --iron-2: #2b3b46;
+  --paper: #f5f6f4;
+  --ink: #18222a;
+  --muted: #5d6b74;
+  --line: #d9dedf;
+  --accent: #e8a33d;      /* card frame orange */
+  --me: #1a73e8;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --paper: #141b20; --ink: #e7ecee; --muted: #9aa8b0; --line: #2c3a43; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--font-body); color: var(--ink); background: var(--paper); overflow: hidden; }
+#map { position: fixed; inset: 0; background: #dfe4e2; }
+
+.bar {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 1000;
+  padding: calc(var(--safe-top) + 10px) 12px 10px;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--iron); color: #fff;
+  box-shadow: 0 2px 10px rgb(0 0 0 / .25);
+}
+.brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.brand svg { flex: none; }
+.brand h1 { font-size: 16px; font-weight: 900; margin: 0; letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand small { display: block; font-size: 11px; font-weight: 400; color: #b9c6cd; letter-spacing: .02em; }
+.btn {
+  appearance: none; border: 1px solid #44586a; background: var(--iron-2); color: #fff;
+  font: 700 13px/1 var(--font-body); padding: 9px 12px; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover { background: #36495a; }
+.btn:focus-visible, .chip:focus-visible, .row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.on { background: var(--me); border-color: var(--me); }
+
+/* bottom sheet */
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000;
+  background: var(--paper); border-top: 1px solid var(--line);
+  border-radius: 14px 14px 0 0; box-shadow: 0 -6px 18px rgb(0 0 0 / .18);
+  padding: 6px 16px calc(var(--safe-bottom) + 10px);
+  max-height: 44vh; display: flex; flex-direction: column;
+  transition: max-height .2s ease;
+}
+.sheet.min { max-height: 64px; }
+.grab { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 2px 0 6px; border: 0; padding: 0; cursor: pointer; }
+.sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.sheet-head h2 { margin: 0; font-size: 15px; font-weight: 900; }
+.status { font-size: 12px; color: var(--muted); }
+.list { overflow-y: auto; margin-top: 8px; display: grid; gap: 2px; padding-bottom: 4px; }
+.row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  padding: 8px 6px; border-radius: 8px; cursor: pointer; border: 0; background: none; color: inherit; text-align: left; font: inherit;
+}
+.row:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.row .t { min-width: 0; }
+.row .t b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .t span { font-size: 12px; color: var(--muted); }
+.row .d { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.badge {
+  min-width: 34px; height: 24px; padding: 0 6px; border-radius: 6px;
+  display: inline-grid; place-items: center; color: #fff; font: 700 12px/1 var(--font-mono);
+  text-shadow: 0 1px 1px rgb(0 0 0 / .35);
+}
+
+/* filter drawer */
+.drawer {
+  position: fixed; z-index: 1100; top: 0; right: 0; bottom: 0; width: min(340px, 88vw);
+  background: var(--paper); box-shadow: -8px 0 24px rgb(0 0 0 / .25);
+  padding: calc(var(--safe-top) + 14px) 16px calc(var(--safe-bottom) + 14px);
+  display: flex; flex-direction: column; gap: 12px;
+  transform: translateX(105%); transition: transform .2s ease;
+}
+.drawer.open { transform: none; }
+.drawer h2 { margin: 0; font-size: 16px; font-weight: 900; }
+.drawer .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.drawer .tools .btn { background: transparent; color: var(--ink); border-color: var(--line); }
+.chips { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.chip {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px;
+  border: 1px solid var(--line); cursor: pointer; font-size: 13px; user-select: none;
+}
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.chip.off { opacity: .4; }
+.chip .n { margin-left: auto; color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.scrim { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / .3); }
+
+/* markers */
+.pin {
+  width: 30px; height: 30px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg);
+  display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / .4);
+}
+.pin span { transform: rotate(45deg); color: #fff; font: 700 11px/1 var(--font-mono); text-shadow: 0 1px 1px rgb(0 0 0 / .4); }
+.pin.sp span { font-size: 9px; }
+.me-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--me); border: 3px solid #fff; box-shadow: 0 0 0 2px rgb(26 115 232 / .35), 0 1px 4px rgb(0 0 0 / .4); }
+.marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: rgb(29 42 51 / .25); }
+.marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: var(--iron); color: #fff; font: 700 12px var(--font-mono); }
+
+/* popup */
+.leaflet-popup-content { margin: 12px; font-family: var(--font-body); }
+.pop { display: grid; grid-template-columns: 112px 1fr; gap: 12px; width: min(300px, 70vw); }
+.pop img { width: 112px; height: auto; aspect-ratio: 194 / 270; object-fit: cover; border-radius: 6px; background: #e3e7e8; display: block; }
+.pop h3 { margin: 4px 0 2px; font-size: 16px; font-weight: 900; line-height: 1.3; }
+.pop .sub { font-size: 12px; color: #5d6b74; }
+.pop dl { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; font-size: 12px; }
+.pop dt { color: #5d6b74; }
+.pop dd { margin: 0; font-family: var(--font-mono); font-size: 11.5px; }
+.pop a.go { display: inline-block; margin-top: 10px; font-weight: 700; font-size: 13px; color: #1a73e8; text-decoration: none; }
+@media (max-width: 380px) { .pop { grid-template-columns: 88px 1fr; } .pop img { width: 88px; } }
+.leaflet-top { top: calc(var(--safe-top) + 64px); }
+@media (prefers-reduced-motion: reduce) { .sheet, .drawer { transition: none; } }
+</style>
+</head>
+<body>
+<div id="map" aria-label="地図"></div>
+
+<header class="bar">
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="12.5" fill="#3d505e" stroke="#e8a33d" stroke-width="2"/><g stroke="#8fa3af" stroke-width="1.4"><path d="M6 10h16M5 14h18M6 18h16"/><path d="M10 6v16M14 5v18M18 6v16"/></g></svg>
+    <div><h1>マンホールカードマップ</h1><small id="sub">第1〜29弾・特別版</small></div>
+  </div>
+  <button class="btn" id="locate" type="button" aria-pressed="false" title="現在地を表示">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>現在地
+  </button>
+  <button class="btn" id="filterBtn" type="button" aria-controls="drawer" aria-expanded="false">弾で絞り込み</button>
+</header>
+
+<section class="sheet" id="sheet" aria-label="近くのカード">
+  <button class="grab" id="grab" type="button" aria-label="一覧を開閉"></button>
+  <div class="sheet-head"><h2 id="listTitle">近くのマンホールカード</h2><span class="status" id="status">現在地を取得しています…</span></div>
+  <div class="list" id="list"></div>
+</section>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-label="弾で絞り込み">
+  <h2>表示する弾</h2>
+  <div class="tools">
+    <button class="btn" type="button" id="all">すべて</button>
+    <button class="btn" type="button" id="none">すべて外す</button>
+    <button class="btn" type="button" id="close">閉じる</button>
+  </div>
+  <div class="chips" id="chips"></div>
+</aside>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script>
+(async function () {
+  const IMG = 'https://www.gk-p.jp/wp-content/uploads/mhc/';
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  const data = await fetch('data.json').then((r) => r.json());
+  const series = data.series;
+  // spread the 31 series around the hue wheel so neighbouring 弾 get distinct colours
+  const color = {};
+  series.forEach((s, i) => { color[s.key] = `hsl(${Math.round((i * 137.508) % 360)} 62% 42%)`; });
+  const short = (s) => (s.key.startsWith('SP') ? (s.key === 'SP1' ? '特1' : '特2') : String(Number(s.key)));
+  const byKey = Object.fromEntries(series.map((s) => [s.key, s]));
+  const cards = data.cards.map(([key, code, title, subtitle, group, lat, lng]) => ({ key, code, title, subtitle, group, lat, lng }));
+
+  const map = L.map('map', { zoomControl: true, attributionControl: true }).setView([36.2, 137.8], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors | カード情報: GKP',
+  }).addTo(map);
+
+  const cluster = L.markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 15, showCoverageOnHover: false });
+  map.addLayer(cluster);
+
+  const dms = (v, pos, neg) => {
+    const a = Math.abs(v); let d = Math.floor(a); let m = Math.floor((a - d) * 60);
+    let s = Math.round(((a - d) * 60 - m) * 600) / 10;
+    if (s >= 60) { s -= 60; m += 1; } if (m >= 60) { m -= 60; d += 1; }
+    return `${d}°${String(m).padStart(2, '0')}'${s.toFixed(1).padStart(4, '0')}"${v >= 0 ? pos : neg}`;
+  };
+  const dist = (a, b, c, d) => {
+    const R = 6371e3, r = Math.PI / 180;
+    const x = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  };
+  const fmt = (m) => (m < 1000 ? `${Math.round(m)} m` : m < 100000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m / 1000)} km`);
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  let me = null;
+  const popup = (c) => {
+    const s = byKey[c.key];
+    const far = me ? `<dt>距離</dt><dd>${fmt(dist(me.lat, me.lng, c.lat, c.lng))}</dd>` : '';
+    return `<div class="pop">
+      <a href="${IMG + encodeURIComponent(c.code)}.jpg" target="_blank" rel="noopener"><img src="${IMG + encodeURIComponent(c.code)}.jpg" alt="${esc(c.title)}のマンホールカード" loading="lazy"></a>
+      <div>
+        <span class="badge" style="background:${color[c.key]}">${esc(s.label)}</span>
+        <h3>${esc(c.title)}</h3><div class="sub">${esc(c.subtitle)}・${esc(c.group)}</div>
+        <dl><dt>コード</dt><dd>${esc(c.code)}</dd><dt>位置</dt><dd>${dms(c.lat, 'N', 'S')}<br>${dms(c.lng, 'E', 'W')}</dd>${far}</dl>
+        <a class="go" href="https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lng}" target="_blank" rel="noopener">Googleマップで経路を見る ↗</a>
+      </div></div>`;
+  };
+
+  cards.forEach((c) => {
+    const s = byKey[c.key];
+    c.marker = L.marker([c.lat, c.lng], {
+      title: `${s.label} ${c.title}`,
+      icon: L.divIcon({ className: '', html: `<div class="pin${c.key.startsWith('SP') ? ' sp' : ''}" style="background:${color[c.key]}"><span>${short(s)}</span></div>`, iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] }),
+    });
+    c.marker.bindPopup(() => popup(c), { maxWidth: 340, autoPan: false });
+  });
+
+  // pan so an opened popup sits between the top bar and the bottom sheet
+  map.on('popupopen', (e) => {
+    // wait for any zoom animation and the popup layout to settle
+    setTimeout(() => {
+      if (!e.popup.isOpen()) return;
+      const h = e.popup.getElement().offsetHeight;
+      const top = document.querySelector('.bar').getBoundingClientRect().bottom + 12;
+      const bottom = $('sheet').getBoundingClientRect().top - 12;
+      // marker sits under the popup tip: aim for the popup top at `top`, but never push the marker below `bottom`
+      const pt = map.latLngToContainerPoint(e.popup.getLatLng());
+      const tip = e.popup.getLatLng() && (map.latLngToContainerPoint(e.popup.getLatLng()).y - e.popup.getElement().getBoundingClientRect().bottom);
+      const targetY = Math.min(top + h + Math.max(tip, 0) + 6, bottom);
+      map.panBy([pt.x - innerWidth / 2, pt.y - targetY], { animate: true });
+    }, 350);
+  });
+
+  // filter
+  let shown = new Set(store.get('mcm.shown') || series.map((s) => s.key));
+  const chips = $('chips');
+  series.forEach((s) => {
+    const l = document.createElement('label');
+    l.className = 'chip'; l.tabIndex = 0;
+    l.innerHTML = `<input type="checkbox" id="f-${s.key}"><span class="sw" style="background:${color[s.key]}"></span>${esc(s.label)}<span class="n">${s.count}</span>`;
+    const cb = l.querySelector('input');
+    cb.checked = shown.has(s.key); l.classList.toggle('off', !cb.checked);
+    cb.addEventListener('change', () => { cb.checked ? shown.add(s.key) : shown.delete(s.key); l.classList.toggle('off', !cb.checked); apply(); });
+    l.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); cb.click(); } });
+    chips.appendChild(l);
+  });
+  const setAll = (on) => { shown = new Set(on ? series.map((s) => s.key) : []); chips.querySelectorAll('input').forEach((cb) => { cb.checked = on; cb.parentElement.classList.toggle('off', !on); }); apply(); };
+  $('all').onclick = () => setAll(true);
+  $('none').onclick = () => setAll(false);
+  const drawer = (open) => { $('drawer').classList.toggle('open', open); $('scrim').hidden = !open; $('filterBtn').setAttribute('aria-expanded', open); };
+  $('filterBtn').onclick = () => drawer(true);
+  $('close').onclick = $('scrim').onclick = () => drawer(false);
+
+  function apply() {
+    store.set('mcm.shown', [...shown]);
+    cluster.clearLayers();
+    cluster.addLayers(cards.filter((c) => shown.has(c.key)).map((c) => c.marker));
+    const n = cards.filter((c) => shown.has(c.key)).length;
+    $('sub').textContent = shown.size === series.length ? `全${series.length}シリーズ・${n}枚` : `${shown.size}シリーズを表示・${n}枚`;
+    renderList();
+  }
+
+  // nearest list
+  function renderList() {
+    const list = $('list');
+    const pool = cards.filter((c) => shown.has(c.key));
+    const ref = me || (() => { const c = map.getCenter(); return { lat: c.lat, lng: c.lng }; })();
+    $('listTitle').textContent = me ? '近くのマンホールカード' : '地図の中心から近いカード';
+    const near = pool.map((c) => [dist(ref.lat, ref.lng, c.lat, c.lng), c]).sort((a, b) => a[0] - b[0]).slice(0, 25);
+    list.innerHTML = '';
+    near.forEach(([d, c]) => {
+      const s = byKey[c.key];
+      const b = document.createElement('button');
+      b.className = 'row'; b.type = 'button';
+      b.innerHTML = `<span class="badge" style="background:${color[c.key]}">${esc(short(s))}</span><span class="t"><b>${esc(c.title)}</b><span>${esc(c.subtitle)}・${esc(s.label)}</span></span><span class="d">${fmt(d)}</span>`;
+      b.onclick = () => {
+        if (innerWidth < 700) $('sheet').classList.add('min');
+        cluster.zoomToShowLayer(c.marker, () => setTimeout(() => c.marker.openPopup(), 250));
+      };
+      list.appendChild(b);
+    });
+    if (!near.length) list.innerHTML = '<p class="status">表示する弾が選ばれていません。「弾で絞り込み」から選んでください。</p>';
+  }
+  $('grab').onclick = () => $('sheet').classList.toggle('min');
+  let t; map.on('moveend', () => { if (!me) { clearTimeout(t); t = setTimeout(renderList, 150); } });
+
+  // location
+  let meMarker = null, acc = null, follow = false, firstFix = true;
+  const status = $('status');
+  function onPos(p) {
+    me = { lat: p.coords.latitude, lng: p.coords.longitude };
+    const ll = [me.lat, me.lng];
+    if (!meMarker) {
+      meMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000, title: '現在地' }).addTo(map);
+      acc = L.circle(ll, { radius: p.coords.accuracy, color: '#1a73e8', weight: 1, fillOpacity: 0.08 }).addTo(map);
+    } else { meMarker.setLatLng(ll); acc.setLatLng(ll).setRadius(p.coords.accuracy); }
+    if (firstFix || follow) { map.setView(ll, Math.max(map.getZoom(), 13)); firstFix = false; }
+    status.textContent = `現在地 精度±${Math.round(p.coords.accuracy)}m`;
+    renderList();
+  }
+  function onErr(e) {
+    status.textContent = e.code === 1 ? '位置情報が許可されていません（ブラウザの設定で許可してください）' : '現在地を取得できませんでした';
+    renderList();
+  }
+  if ('geolocation' in navigator) {
+    navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+  } else { status.textContent = 'この端末では位置情報が使えません'; }
+  $('locate').onclick = () => {
+    follow = !follow;
+    $('locate').classList.toggle('on', follow); $('locate').setAttribute('aria-pressed', follow);
+    if (me) map.setView([me.lat, me.lng], Math.max(map.getZoom(), 15));
+  };
+  map.on('dragstart', () => { if (follow) { follow = false; $('locate').classList.remove('on'); $('locate').setAttribute('aria-pressed', 'false'); } });
+
+  apply();
+})();
+</script>
+</body>
+</html>
