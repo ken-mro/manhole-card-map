@@ -22,13 +22,14 @@
   --line: #d9dedf;
   --accent: #e8a33d;      /* card frame orange */
   --me: #1a73e8;
+  --link: #1a5fc4;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 @media (prefers-color-scheme: dark) {
-  :root { --paper: #141b20; --ink: #e7ecee; --muted: #9aa8b0; --line: #2c3a43; color-scheme: dark; }
+  :root { --paper: #141b20; --ink: #e7ecee; --muted: #9aa8b0; --line: #2c3a43; --link: #8ab8ff; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -179,6 +180,25 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 .switch input:checked + i::after { transform: translateX(18px); }
 .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
 .drawer h3 { margin: 4px 0 0; font-size: 14px; font-weight: 900; }
+.links { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
+.links a, .links button { color: var(--muted); background: none; border: 0; padding: 4px 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.links a:hover, .links button:hover { color: var(--ink); }
+
+/* about dialog */
+.about {
+  width: min(30rem, calc(100vw - 32px)); max-height: calc(100% - 32px); overflow-y: auto;
+  border: 0; border-radius: 14px; padding: 22px 20px 18px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 18px 48px rgb(0 0 0 / .35); font-size: 14px; line-height: 1.75;
+}
+.about::backdrop { background: rgb(15 22 27 / .55); }
+.about h2 { margin: 0 0 10px; font-size: 19px; font-weight: 900; text-wrap: balance; }
+.about p { margin: 0 0 10px; }
+.about ul { margin: 0 0 10px; padding-left: 1.2em; }
+.about li { margin-bottom: 4px; }
+.about a { color: var(--link); }
+.about .fine { font-size: 12px; color: var(--muted); }
+.about form { display: flex; justify-content: flex-end; margin: 6px 0 0; }
+.btn.primary { background: var(--iron); border-color: var(--iron); padding: 11px 18px; }
 .leaflet-top { top: calc(var(--safe-top) + 64px); }
 @media (prefers-reduced-motion: reduce) { .sheet, .drawer, .sheet-head .chev { transition: none; } }
 </style>
@@ -222,7 +242,25 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
     <button class="btn" type="button" id="close">閉じる</button>
   </div>
   <div class="chips" id="chips"></div>
+  <nav class="links" aria-label="このサイトについて">
+    <button type="button" id="aboutBtn">このサイトについて</button>
+    <a href="terms.html">利用規約</a>
+    <a href="privacy.html">プライバシーポリシー</a>
+  </nav>
 </aside>
+
+<dialog class="about" id="about" aria-labelledby="aboutTitle">
+  <h2 id="aboutTitle">マンホールを見に行こう</h2>
+  <p>このサイトは、マンホールカードの題材になっているデザインマンホールの場所を地図に表示します。<strong>カードを集めるためのものではなく、そのマンホールを実際に訪ねて、足元のデザインを自分の目で見ることを楽しむためのサイト</strong>です。</p>
+  <p>カードの配布場所や在庫の案内はしていません。カードを入手したいときは <a href="https://www.gk-p.jp/mhcard/" target="_blank" rel="noopener">GKP のマンホールカードページ</a>をご覧ください。</p>
+  <ul>
+    <li>見学・撮影は歩道から。車道や私有地には入らないでください。</li>
+    <li>デザインを現地まで取っておきたい人は、「表示設定」でカードのデザインを隠せます。</li>
+    <li>現在地は端末の中だけで使い、どこにも送信しません。</li>
+  </ul>
+  <p class="fine">GKP・各自治体とは関係のない非公式サイトです。<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシーポリシー</a></p>
+  <form method="dialog"><button class="btn primary" type="submit" id="aboutOk">地図を見る</button></form>
+</dialog>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
@@ -347,6 +385,14 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
   const drawer = (open) => { $('drawer').classList.toggle('open', open); $('scrim').hidden = !open; $('filterBtn').setAttribute('aria-expanded', open); };
   $('filterBtn').onclick = () => drawer(true);
   $('close').onclick = $('scrim').onclick = () => drawer(false);
+
+  // about: shown on the first visit, reopenable from the settings drawer
+  const about = $('about');
+  const openAbout = () => { if (about.showModal) about.showModal(); else about.setAttribute('open', ''); };
+  about.addEventListener('close', () => store.set('mcm.aboutSeen', true));
+  $('aboutOk').addEventListener('click', () => store.set('mcm.aboutSeen', true));
+  $('aboutBtn').onclick = () => { drawer(false); openAbout(); };
+  if (!store.get('mcm.aboutSeen')) openAbout();
 
   function apply() {
     store.set('mcm.shown', [...shown]);
