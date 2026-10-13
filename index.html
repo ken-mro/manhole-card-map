@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>マンホールカードマップ</title>
 <meta name="theme-color" content="#1d2a33">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=JetBrains+Mono:wght@500&display=swap">
@@ -196,6 +199,7 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 .about ul { margin: 0 0 10px; padding-left: 1.2em; }
 .about li { margin-bottom: 4px; }
 .about a { color: var(--link); }
+.about .notice { padding: 10px 12px; border-left: 4px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .about .fine { font-size: 12px; color: var(--muted); }
 .about form { display: flex; justify-content: flex-end; margin: 6px 0 0; }
 .btn.primary { background: var(--iron); border-color: var(--iron); padding: 11px 18px; }
@@ -246,19 +250,19 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
     <button type="button" id="aboutBtn">このサイトについて</button>
     <a href="terms.html">利用規約</a>
     <a href="privacy.html">プライバシーポリシー</a>
+    <a href="changelog.html">更新履歴</a>
   </nav>
 </aside>
 
 <dialog class="about" id="about" aria-labelledby="aboutTitle">
   <h2 id="aboutTitle">マンホールを見に行こう</h2>
-  <p>このサイトは、マンホールカードの題材になっているデザインマンホールの場所を地図に表示します。<strong>カードを集めるためのものではなく、そのマンホールを実際に訪ねて、足元のデザインを自分の目で見ることを楽しむためのサイト</strong>です。</p>
-  <p>カードの配布場所や在庫の案内はしていません。カードを入手したいときは <a href="https://www.gk-p.jp/mhcard/" target="_blank" rel="noopener">GKP のマンホールカードページ</a>をご覧ください。</p>
+  <p class="notice" role="note">このサイトは、マンホールカードを集めるためのものではありません。マンホールカードの題材になっているデザインマンホールを見に行くためのサイトです。従って、地図にはデザインマンホールの場所が表示されていますが、カードの配布場所や在庫の案内はしていません。カードを入手したいときは <a href="https://www.gk-p.jp/mhcard/" target="_blank" rel="noopener">GKP のマンホールカードページ</a>をご覧ください。</p>
   <ul>
     <li>見学・撮影は歩道から。車道や私有地には入らないでください。</li>
-    <li>デザインを現地まで取っておきたい人は、「表示設定」でカードのデザインを隠せます。</li>
+    <li>マンホールのデザインを、訪れた際の楽しみに取っておきたい方は、「表示設定」でカードのデザインを非表示にすることができます。</li>
     <li>現在地は端末の中だけで使い、どこにも送信しません。</li>
   </ul>
-  <p class="fine">GKP・各自治体とは関係のない非公式サイトです。<a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシーポリシー</a></p>
+  <p class="fine">GKP・各自治体とは関係のない非公式サイトです。<br><a href="terms.html">利用規約</a>・<a href="privacy.html">プライバシーポリシー</a>・<a href="changelog.html">更新履歴</a></p>
   <form method="dialog"><button class="btn primary" type="submit" id="aboutOk">地図を見る</button></form>
 </dialog>
 
