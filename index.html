@@ -279,7 +279,7 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
 
   const data = await fetch('data.json').then((r) => r.json());
   const series = data.series;
-  // spread the 31 series around the hue wheel so neighbouring 弾 get distinct colours
+  // spread the series around the hue wheel so neighbouring 弾 get distinct colours
   const color = {};
   series.forEach((s, i) => { color[s.key] = `hsl(${Math.round((i * 137.508) % 360)} 62% 42%)`; });
   const short = (s) => (s.key.startsWith('SP') ? (s.key === 'SP1' ? '特1' : '特2') : String(Number(s.key)));
@@ -371,7 +371,14 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
   });
 
   // filter
-  let shown = new Set(store.get('mcm.shown') || series.map((s) => s.key));
+  // remember the 弾 turned off rather than those shown, so a 弾 added later starts visible
+  let hidden = store.get('mcm.hidden');
+  if (!hidden) {
+    // earlier visits saved the shown set; a series added since then carries `since` and stays visible
+    const saved = store.get('mcm.shown');
+    hidden = saved ? series.filter((s) => !s.since && !saved.includes(s.key)).map((s) => s.key) : [];
+  }
+  let shown = new Set(series.map((s) => s.key).filter((k) => !hidden.includes(k)));
   const chips = $('chips');
   series.forEach((s) => {
     const l = document.createElement('label');
@@ -399,7 +406,7 @@ body { font-family: var(--font-body); color: var(--ink); background: var(--paper
   if (!store.get('mcm.aboutSeen')) openAbout();
 
   function apply() {
-    store.set('mcm.shown', [...shown]);
+    store.set('mcm.hidden', series.map((s) => s.key).filter((k) => !shown.has(k)));
     cluster.clearLayers();
     cluster.addLayers(cards.filter((c) => shown.has(c.key)).map((c) => c.marker));
     const n = cards.filter((c) => shown.has(c.key)).length;
